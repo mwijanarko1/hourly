@@ -151,15 +151,31 @@ export function subscribeToUserChecklist(
 ): Unsubscribe {
   const userDocRef = doc(db, COLLECTION_NAME, userId);
   
+  console.log('🔍 Setting up onSnapshot listener for user:', userId);
+  
   return onSnapshot(
     userDocRef,
     (docSnap) => {
+      console.log('🔍 onSnapshot triggered:', {
+        exists: docSnap.exists(),
+        hasData: docSnap.exists() && docSnap.data(),
+        metadata: docSnap.metadata
+      });
+      
       if (!docSnap.exists()) {
+        console.log('⚠️ Document does not exist, calling onDataChange with null');
         onDataChange(null);
         return;
       }
 
       const data = docSnap.data();
+      console.log('🔍 Raw Firestore data received:', {
+        keys: Object.keys(data),
+        itemsCount: data.items?.length || 0,
+        progressHistoryCount: data.progressHistory?.length || 0,
+        lastModified: data.lastModified,
+        data: data
+      });
       
       try {
         // Convert ISO strings back to Date objects
@@ -189,16 +205,23 @@ export function subscribeToUserChecklist(
           settings: data.settings
         };
         
+        console.log('🔍 Parsed checklist state:', {
+          itemsCount: checklistState.items.length,
+          progressHistoryCount: checklistState.progressHistory.length,
+          state: checklistState
+        });
+        
+        console.log('🔍 Calling onDataChange with parsed data');
         onDataChange(checklistState);
       } catch (error) {
-        console.error('Error parsing real-time data:', error);
+        console.error('❌ Error parsing real-time data:', error);
         if (onError) {
           onError(error as Error);
         }
       }
     },
     (error) => {
-      console.error('Real-time listener error:', error);
+      console.error('❌ Real-time listener error:', error);
       if (onError) {
         onError(error);
       }

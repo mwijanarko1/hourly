@@ -36,12 +36,24 @@ export function useChecklistWithAuth() {
         const hasFirestoreData = await hasUserData(user.uid);
         
         if (hasFirestoreData) {
+          console.log('🔍 Setting up real-time listener for user:', user.uid);
           // Set up real-time listener for syncing data from other devices
           unsubscribe = subscribeToUserChecklist(
             user.uid,
             (firestoreData) => {
+              console.log('🔍 Real-time listener triggered with data:', {
+                hasData: !!firestoreData,
+                itemsCount: firestoreData?.items?.length || 0,
+                progressHistoryCount: firestoreData?.progressHistory?.length || 0,
+                data: firestoreData
+              });
+              
               if (firestoreData) {
                 console.log('🔄 Real-time sync: Data updated from Firestore');
+                console.log('🔍 Current local state before update:', {
+                  itemsCount: state.items.length,
+                  progressHistoryCount: state.progressHistory.length
+                });
                 
                 // Simple conflict resolution: always use the latest data from Firestore
                 // since it represents the most recent changes from any device
@@ -49,6 +61,10 @@ export function useChecklistWithAuth() {
                 saveChecklistState(firestoreData);
                 setLastSyncTime(new Date());
                 setIsSyncing(false);
+                
+                console.log('✅ Real-time sync completed, state updated');
+              } else {
+                console.log('⚠️ Real-time listener received null/undefined data');
               }
             },
             (error) => {
@@ -56,6 +72,7 @@ export function useChecklistWithAuth() {
               setIsSyncing(false);
             }
           );
+          console.log('✅ Real-time listener set up successfully');
         } else {
           // User has no Firestore data, check for local data
           const localData = loadChecklistState();
@@ -84,6 +101,7 @@ export function useChecklistWithAuth() {
     // Cleanup listener when user changes or component unmounts
     return () => {
       if (unsubscribe) {
+        console.log('🔍 Cleaning up real-time listener');
         unsubscribe();
       }
     };
@@ -106,9 +124,10 @@ export function useChecklistWithAuth() {
       // User is authenticated, also save to Firestore
       setIsSyncing(true);
       try {
+        console.log('🔍 About to save to Firestore, this should trigger real-time listeners on other devices');
         await saveUserChecklistState(user.uid, newState);
         setLastSyncTime(new Date());
-        console.log('✅ Data saved to Firestore and synced');
+        console.log('✅ Data saved to Firestore and synced - other devices should receive this update via real-time listeners');
       } catch (error) {
         console.error('❌ Error saving to Firestore:', error);
         // Local storage save already happened above, so we still have persistence
@@ -178,6 +197,12 @@ export function useChecklistWithAuth() {
 
   // Save state whenever it changes
   useEffect(() => {
+    console.log('🔍 State changed, triggering saveData:', {
+      itemsCount: state.items.length,
+      progressHistoryCount: state.progressHistory.length,
+      lastReset: state.lastReset,
+      nextReset: state.nextReset
+    });
     saveData(state);
   }, [state, saveData]);
 
