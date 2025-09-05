@@ -91,6 +91,14 @@ export function useChecklistWithAuth() {
 
   // Save data to appropriate storage
   const saveData = useCallback(async (newState: ChecklistState) => {
+    // Debug: Log what we're saving
+    console.log('🔍 saveData called with:', {
+      itemsCount: newState.items.length,
+      progressHistoryCount: newState.progressHistory.length,
+      items: newState.items,
+      progressHistory: newState.progressHistory
+    });
+    
     // Always save to local storage first for immediate persistence
     saveChecklistState(newState);
     

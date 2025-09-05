@@ -18,6 +18,15 @@ export async function saveUserChecklistState(userId: string, state: ChecklistSta
   try {
     const userDocRef = doc(db, COLLECTION_NAME, userId);
     
+    // Debug: Log what we're about to save
+    console.log('🔍 Saving to Firestore:', {
+      userId,
+      itemsCount: state.items.length,
+      progressHistoryCount: state.progressHistory.length,
+      items: state.items,
+      progressHistory: state.progressHistory
+    });
+    
     // Convert dates to ISO strings for Firestore storage
     const stateToSave = {
       ...state,
@@ -38,7 +47,9 @@ export async function saveUserChecklistState(userId: string, state: ChecklistSta
       }))
     };
 
+    console.log('🔍 State to save to Firestore:', stateToSave);
     await setDoc(userDocRef, stateToSave, { merge: true });
+    console.log('✅ Successfully saved to Firestore');
   } catch (error) {
     console.error('Error saving checklist state to Firestore:', error);
     throw error;
