@@ -42,9 +42,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+      
+      // Check if we're in a popup-blocked environment
+      if (typeof window !== 'undefined' && window.opener) {
+        console.warn('Running in popup context, this might cause issues');
+      }
+      
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      // Log successful sign in for debugging
+      console.log('Successfully signed in:', {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName
+      });
+      
+    } catch (error: any) {
       console.error('Error signing in with Google:', error);
+      
+      // Handle specific error cases
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.warn('User closed the popup window');
+        // Don't throw error for user closing popup
+        return;
+      } else if (error.code === 'auth/popup-blocked') {
+        console.error('Popup was blocked by browser');
+        throw new Error('Popup was blocked. Please allow popups for this site and try again.');
+      } else if (error.code === 'auth/network-request-failed') {
+        console.error('Network error during authentication');
+        throw new Error('Network error. Please check your connection and try again.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        console.error('Unauthorized domain for authentication');
+        throw new Error('Authentication domain not authorized. Please contact support.');
+      }
+      
       throw error;
     } finally {
       setLoading(false);
@@ -55,8 +86,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       await signOut(auth);
-    } catch (error) {
+      
+      // Log successful logout for debugging
+      console.log('Successfully signed out');
+      
+    } catch (error: any) {
       console.error('Error signing out:', error);
+      
+      // Handle specific error cases
+      if (error.code === 'auth/network-request-failed') {
+        console.error('Network error during logout');
+        throw new Error('Network error during logout. Please check your connection.');
+      }
+      
       throw error;
     } finally {
       setLoading(false);

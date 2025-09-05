@@ -228,7 +228,7 @@ export default function ProgressChart({
               <Button
                 onClick={signInWithGoogle}
                 size="sm"
-                className="bg-white text-blue-600 hover:bg-blue-50 border border-blue-300 dark:bg-blue-800 dark:text-blue-100 dark:hover:bg-blue-700 dark:border-blue-600"
+                variant="primary"
               >
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                   <path
