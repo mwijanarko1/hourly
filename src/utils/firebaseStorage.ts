@@ -2,7 +2,9 @@ import {
   doc, 
   getDoc, 
   setDoc, 
-  updateDoc
+  updateDoc,
+  onSnapshot,
+  Unsubscribe
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ChecklistState, UserSettings } from '@/types';
@@ -21,6 +23,7 @@ export async function saveUserChecklistState(userId: string, state: ChecklistSta
       ...state,
       lastReset: state.lastReset.toISOString(),
       nextReset: state.nextReset.toISOString(),
+      lastModified: new Date().toISOString(), // Add timestamp for conflict resolution
       items: state.items.map(item => ({
         ...item,
         createdAt: item.createdAt.toISOString()
@@ -125,4 +128,69 @@ export async function updateUserSettings(userId: string, settings: UserSettings)
     console.error('Error updating user settings:', error);
     throw error;
   }
+}
+
+/**
+ * Set up real-time listener for user's checklist data
+ */
+export function subscribeToUserChecklist(
+  userId: string, 
+  onDataChange: (data: ChecklistState | null) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  const userDocRef = doc(db, COLLECTION_NAME, userId);
+  
+  return onSnapshot(
+    userDocRef,
+    (docSnap) => {
+      if (!docSnap.exists()) {
+        onDataChange(null);
+        return;
+      }
+
+      const data = docSnap.data();
+      
+      try {
+        // Convert ISO strings back to Date objects
+        const checklistState: ChecklistState = {
+          items: data.items.map((item: { id: string; text: string; completed: boolean; createdAt: string }) => ({
+            ...item,
+            createdAt: new Date(item.createdAt)
+          })),
+          lastReset: new Date(data.lastReset),
+          nextReset: new Date(data.nextReset),
+          progressHistory: data.progressHistory.map((progress: { 
+            hour: number; 
+            date: string; 
+            completedItems: number; 
+            totalItems: number; 
+            completionRate: number; 
+            items: { id: string; text: string; completed: boolean; createdAt: string }[]; 
+            timestamp: string; 
+          }) => ({
+            ...progress,
+            timestamp: new Date(progress.timestamp),
+            items: progress.items.map((item: { id: string; text: string; completed: boolean; createdAt: string }) => ({
+              ...item,
+              createdAt: new Date(item.createdAt)
+            }))
+          })),
+          settings: data.settings
+        };
+        
+        onDataChange(checklistState);
+      } catch (error) {
+        console.error('Error parsing real-time data:', error);
+        if (onError) {
+          onError(error as Error);
+        }
+      }
+    },
+    (error) => {
+      console.error('Real-time listener error:', error);
+      if (onError) {
+        onError(error);
+      }
+    }
+  );
 }

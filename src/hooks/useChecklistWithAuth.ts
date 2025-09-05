@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChecklistState, ChecklistItem, UserSettings } from '@/types';
 import { loadChecklistState, saveChecklistState } from '@/utils/storage';
-import { loadUserChecklistState, saveUserChecklistState, hasUserData } from '@/utils/firebaseStorage';
+import { loadUserChecklistState, saveUserChecklistState, hasUserData, subscribeToUserChecklist } from '@/utils/firebaseStorage';
 import { getNextHourReset, getLastHourReset, shouldReset } from '@/utils/time';
 import { generateId, sanitizeText, validateChecklistItem } from '@/utils/validation';
 import { getCurrentHour, getTodayString, updateOrCreateHourlyProgress } from '@/utils/progress';
@@ -14,31 +14,48 @@ export function useChecklistWithAuth() {
   const [editText, setEditText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Load data when user authentication state changes
+  // Set up real-time sync when user authentication state changes
   useEffect(() => {
-    const loadData = async () => {
+    let unsubscribe: (() => void) | null = null;
+
+    const setupSync = async () => {
       if (!user) {
         // User is not authenticated, use local storage
         const localData = loadChecklistState();
         setState(localData);
+        setLastSyncTime(null);
         return;
       }
 
       setIsLoading(true);
       try {
-        // Always check for Firestore data when user signs in
+        // Check if user has Firestore data first
         const hasFirestoreData = await hasUserData(user.uid);
         
         if (hasFirestoreData) {
-          // Load from Firestore - this syncs data from other devices
-          const firestoreData = await loadUserChecklistState(user.uid);
-          if (firestoreData) {
-            console.log('✅ Synced data from Firestore for user:', user.uid);
-            setState(firestoreData);
-            // Also update local storage with synced data
-            saveChecklistState(firestoreData);
-          }
+          // Set up real-time listener for syncing data from other devices
+          unsubscribe = subscribeToUserChecklist(
+            user.uid,
+            (firestoreData) => {
+              if (firestoreData) {
+                console.log('🔄 Real-time sync: Data updated from Firestore');
+                
+                // Simple conflict resolution: always use the latest data from Firestore
+                // since it represents the most recent changes from any device
+                setState(firestoreData);
+                saveChecklistState(firestoreData);
+                setLastSyncTime(new Date());
+                setIsSyncing(false);
+              }
+            },
+            (error) => {
+              console.error('❌ Real-time sync error:', error);
+              setIsSyncing(false);
+            }
+          );
         } else {
           // User has no Firestore data, check for local data
           const localData = loadChecklistState();
@@ -53,7 +70,7 @@ export function useChecklistWithAuth() {
           }
         }
       } catch (error) {
-        console.error('❌ Error loading user data:', error);
+        console.error('❌ Error setting up sync:', error);
         // Fallback to local storage
         const localData = loadChecklistState();
         setState(localData);
@@ -62,7 +79,14 @@ export function useChecklistWithAuth() {
       }
     };
 
-    loadData();
+    setupSync();
+
+    // Cleanup listener when user changes or component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [user, isFirstTimeUser, hasCompletedMigration]);
 
   // Save data to appropriate storage
@@ -72,11 +96,16 @@ export function useChecklistWithAuth() {
     
     if (user) {
       // User is authenticated, also save to Firestore
+      setIsSyncing(true);
       try {
         await saveUserChecklistState(user.uid, newState);
+        setLastSyncTime(new Date());
+        console.log('✅ Data saved to Firestore and synced');
       } catch (error) {
         console.error('❌ Error saving to Firestore:', error);
         // Local storage save already happened above, so we still have persistence
+      } finally {
+        setIsSyncing(false);
       }
     }
   }, [user]);
@@ -393,7 +422,7 @@ export function useChecklistWithAuth() {
   const syncDataFromFirestore = useCallback(async () => {
     if (!user) return;
     
-    setIsLoading(true);
+    setIsSyncing(true);
     try {
       const hasFirestoreData = await hasUserData(user.uid);
       if (hasFirestoreData) {
@@ -402,12 +431,13 @@ export function useChecklistWithAuth() {
           console.log('🔄 Manually synced data from Firestore');
           setState(firestoreData);
           saveChecklistState(firestoreData);
+          setLastSyncTime(new Date());
         }
       }
     } catch (error) {
       console.error('❌ Error syncing data:', error);
     } finally {
-      setIsLoading(false);
+      setIsSyncing(false);
     }
   }, [user]);
 
@@ -439,6 +469,8 @@ export function useChecklistWithAuth() {
     isLoading,
     showMigrationModal,
     handleMigrationComplete,
-    syncDataFromFirestore
+    syncDataFromFirestore,
+    lastSyncTime,
+    isSyncing
   };
 }

@@ -9,9 +9,18 @@ import { useChecklistWithAuth } from "@/hooks/useChecklistWithAuth";
 import Button from "@/components/ui/Button";
 import ThemeToggle from "@/components/ThemeToggle";
 import SaveStatus from "@/components/SaveStatus";
+import SyncStatus from "@/components/SyncStatus";
 
 export default function Home() {
-  const { showMigrationModal, handleMigrationComplete, settings, updateSettings } = useChecklistWithAuth();
+  const { 
+    showMigrationModal, 
+    handleMigrationComplete, 
+    settings, 
+    updateSettings,
+    lastSyncTime,
+    isSyncing,
+    syncDataFromFirestore
+  } = useChecklistWithAuth();
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -24,6 +33,11 @@ export default function Home() {
                 Hourly Checklist
               </h1>
               <SaveStatus />
+              <SyncStatus 
+                lastSyncTime={lastSyncTime}
+                isSyncing={isSyncing}
+                onManualSync={syncDataFromFirestore}
+              />
             </div>
             <div className="flex items-center gap-2">
               <Button
