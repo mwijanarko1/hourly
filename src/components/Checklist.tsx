@@ -5,8 +5,8 @@ import { useChecklistWithAuth } from '@/hooks/useChecklistWithAuth';
 import { updateOrCreateHourlyProgress } from '@/utils/progress';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import Input from './ui/Input';
 import ChecklistItem from './ChecklistItem';
-import AddItemForm from './AddItemForm';
 import Timer from './Timer';
 import ProgressChart from './ProgressChart';
 
@@ -16,9 +16,6 @@ export default function Checklist() {
     nextReset,
     progressHistory,
     settings,
-    completedCount,
-    totalCount,
-    progress,
     isEditing,
     editText,
     setEditText,
@@ -40,9 +37,37 @@ export default function Checklist() {
   });
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newItemText, setNewItemText] = useState('');
+  const [addItemError, setAddItemError] = useState('');
 
-  const handleAddItem = (text: string) => {
-    addItem(text);
+  const handleInlineAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newItemText.trim()) {
+      setAddItemError('Please enter a checklist item');
+      return;
+    }
+
+    try {
+      addItem(newItemText);
+      setNewItemText('');
+      setAddItemError('');
+      setShowAddForm(false);
+    } catch (err) {
+      setAddItemError(err instanceof Error ? err.message : 'Failed to add item');
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewItemText(e.target.value);
+    if (addItemError) setAddItemError('');
+  };
+
+  const handleCancelAdd = () => {
+    setShowAddForm(false);
+    setNewItemText('');
+    setAddItemError('');
   };
 
   const handleRemoveItem = (id: string) => {
@@ -113,6 +138,11 @@ export default function Checklist() {
     ? selectedDateProgress.find(p => p.hour === selectedHour)
     : null;
 
+  // Check if the selected hour is the current hour
+  const currentHour = new Date().getHours();
+  const isCurrentHour = selectedHour === currentHour;
+  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+
   // Get hours with data for the selected date
   const hoursWithData = selectedDateProgress
     .map(p => p.hour)
@@ -175,41 +205,61 @@ export default function Checklist() {
         onHourChange={setSelectedHour}
       />
 
-      {/* Progress */}
-      {totalCount > 0 && (
-        <Card>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Progress</span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {completedCount} of {totalCount} completed
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {Math.round(progress)}% complete
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {/* Add Item Form */}
-      <Card>
-        <AddItemForm onAddItem={handleAddItem} />
-      </Card>
 
       {/* Checklist Items */}
       <Card>
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Your Checklist</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Your Checklist</h2>
+            {!showAddForm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAddForm(true)}
+                className="!p-2 !min-w-0"
+                aria-label="Add new item"
+              >
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </Button>
+            )}
+          </div>
+
+          {/* Inline Add Item Form */}
+          {showAddForm && (
+            <form onSubmit={handleInlineAddItem} className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <Input
+                value={newItemText}
+                onChange={handleInputChange}
+                placeholder="Add a new checklist item..."
+                error={addItemError}
+                className="text-sm"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  disabled={!newItemText.trim()}
+                  size="sm"
+                  className="flex-1"
+                >
+                  Add Item
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancelAdd}
+                  size="sm"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
 
           {/* Historical Progress Navigation */}
-          {selectedHour !== null && selectedHourProgress && (
+          {selectedHour !== null && selectedHourProgress && !(isCurrentHour && isToday) && (
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-2">
@@ -268,12 +318,12 @@ export default function Checklist() {
               <svg className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
-              <p>No items yet. Add your first task above!</p>
+              <p>No items yet. Click the + button to add your first task!</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {selectedHour !== null && selectedHourProgress ? (
-                // Show historical items when viewing a past hour
+              {selectedHour !== null && selectedHourProgress && !(isCurrentHour && isToday) ? (
+                // Show historical items when viewing a past hour (but not current hour on today)
                 selectedHourProgress.items.length === 0 ? (
                   <div className="text-center py-8 text-blue-500 dark:text-blue-400">
                     <svg className="mx-auto h-12 w-12 text-blue-400 dark:text-blue-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,12 +364,14 @@ export default function Checklist() {
                   ))
                 )
               ) : (
-                // Show current items when not viewing a specific hour
+                // Show current items when not viewing a specific hour OR when viewing current hour on today
                 items.map((item, index) => {
-                  // Check if this item was completed in the selected hour
-                  const wasCompletedInSelectedHour = selectedHourProgress?.items.find(
-                    historicalItem => historicalItem.id === item.id && historicalItem.completed
-                  );
+                  // Check if this item was completed in the selected hour (only for historical hours)
+                  const wasCompletedInSelectedHour = (selectedHour !== null && !(isCurrentHour && isToday)) 
+                    ? selectedHourProgress?.items.find(
+                        historicalItem => historicalItem.id === item.id && historicalItem.completed
+                      )
+                    : null;
                   
                   return (
                     <ChecklistItem

@@ -8,7 +8,7 @@ import { getCurrentHour, getTodayString, updateOrCreateHourlyProgress } from '@/
 import { useAuth } from '@/contexts/AuthContext';
 
 export function useChecklistWithAuth() {
-  const { user, isFirstTimeUser, setIsFirstTimeUser } = useAuth();
+  const { user, isFirstTimeUser, hasCompletedMigration, setHasCompletedMigration } = useAuth();
   const [state, setState] = useState<ChecklistState>(() => loadChecklistState());
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -27,30 +27,33 @@ export function useChecklistWithAuth() {
 
       setIsLoading(true);
       try {
-        // Check if user has data in Firestore
+        // Always check for Firestore data when user signs in
         const hasFirestoreData = await hasUserData(user.uid);
         
         if (hasFirestoreData) {
-          // Load from Firestore
+          // Load from Firestore - this syncs data from other devices
           const firestoreData = await loadUserChecklistState(user.uid);
           if (firestoreData) {
+            console.log('✅ Synced data from Firestore for user:', user.uid);
             setState(firestoreData);
+            // Also update local storage with synced data
+            saveChecklistState(firestoreData);
           }
         } else {
           // User has no Firestore data, check for local data
           const localData = loadChecklistState();
           const hasLocalData = localData.items.length > 0 || localData.progressHistory.length > 0;
           
-          if (hasLocalData && isFirstTimeUser) {
-            // Show migration modal for first-time users with local data
+          if (hasLocalData && isFirstTimeUser && !hasCompletedMigration) {
+            // Show migration modal only for first-time users with local data who haven't completed migration
             setShowMigrationModal(true);
           } else {
-            // No local data or not first time, start fresh
+            // No data anywhere, or user has already completed migration, start fresh
             setState(localData);
           }
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error('❌ Error loading user data:', error);
         // Fallback to local storage
         const localData = loadChecklistState();
         setState(localData);
@@ -60,7 +63,7 @@ export function useChecklistWithAuth() {
     };
 
     loadData();
-  }, [user, isFirstTimeUser]);
+  }, [user, isFirstTimeUser, hasCompletedMigration]);
 
   // Save data to appropriate storage
   const saveData = useCallback(async (newState: ChecklistState) => {
@@ -378,8 +381,35 @@ export function useChecklistWithAuth() {
   // Handle migration completion
   const handleMigrationComplete = useCallback(() => {
     setShowMigrationModal(false);
-    setIsFirstTimeUser(false);
-  }, [setIsFirstTimeUser]);
+    // Mark migration as completed for this user
+    if (user) {
+      const migrationKey = `migration_completed_${user.uid}`;
+      localStorage.setItem(migrationKey, 'true');
+      setHasCompletedMigration(true);
+    }
+  }, [user, setHasCompletedMigration]);
+
+  // Manual sync function for user-triggered data sync
+  const syncDataFromFirestore = useCallback(async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      const hasFirestoreData = await hasUserData(user.uid);
+      if (hasFirestoreData) {
+        const firestoreData = await loadUserChecklistState(user.uid);
+        if (firestoreData) {
+          console.log('🔄 Manually synced data from Firestore');
+          setState(firestoreData);
+          saveChecklistState(firestoreData);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error syncing data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   return {
     items: state.items,
@@ -408,6 +438,7 @@ export function useChecklistWithAuth() {
     setState,
     isLoading,
     showMigrationModal,
-    handleMigrationComplete
+    handleMigrationComplete,
+    syncDataFromFirestore
   };
 }

@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { validateAuthConfig, logAuthConfig } from './authConfig';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,14 +11,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
-
-// Validate auth configuration
-if (!validateAuthConfig()) {
-  console.error('Firebase auth configuration is invalid');
-}
-
-// Log auth configuration in development
-logAuthConfig();
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -32,14 +23,5 @@ export const db = getFirestore(app);
 
 // Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
-
-// Configure Google Auth Provider for production
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-});
-
-// Add scopes if needed
-googleProvider.addScope('email');
-googleProvider.addScope('profile');
 
 export default app;
