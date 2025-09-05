@@ -16,6 +16,8 @@ export function useChecklistWithAuth() {
   const [showMigrationModal, setShowMigrationModal] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasInitializedFromFirestore, setHasInitializedFromFirestore] = useState(false);
+  const [lastLocalSaveTime, setLastLocalSaveTime] = useState<Date | null>(null);
 
   // Set up real-time sync when user authentication state changes
   useEffect(() => {
@@ -55,16 +57,38 @@ export function useChecklistWithAuth() {
                   progressHistoryCount: state.progressHistory.length
                 });
                 
-                // Simple conflict resolution: always use the latest data from Firestore
-                // since it represents the most recent changes from any device
-                setState(firestoreData);
-                saveChecklistState(firestoreData);
-                setLastSyncTime(new Date());
-                setIsSyncing(false);
+                // Smart conflict resolution: Check if Firestore data is newer than our last local save
+                const firestoreDataWithTimestamp = firestoreData as ChecklistState & { lastModified?: string };
+                const firestoreLastModified = new Date(firestoreDataWithTimestamp.lastModified || 0);
+                const localLastSave = lastLocalSaveTime || new Date(0);
                 
-                console.log('✅ Real-time sync completed, state updated');
+                console.log('🔍 Conflict resolution check:', {
+                  firestoreLastModified: firestoreLastModified.toISOString(),
+                  localLastSave: localLastSave.toISOString(),
+                  firestoreIsNewer: firestoreLastModified > localLastSave,
+                  timeDiff: firestoreLastModified.getTime() - localLastSave.getTime()
+                });
+                
+                // Only update if Firestore data is newer than our last local save
+                // This prevents overwriting our own recent changes
+                if (firestoreLastModified > localLastSave) {
+                  console.log('✅ Using Firestore data (newer than local save)');
+                  setState(firestoreData);
+                  saveChecklistState(firestoreData);
+                  setLastSyncTime(new Date());
+                } else {
+                  console.log('⚠️ Local data is newer, keeping local state');
+                  // Don't update state, but still update sync time to prevent loops
+                  setLastSyncTime(new Date());
+                }
+                
+                setIsSyncing(false);
+                setHasInitializedFromFirestore(true);
+                
+                console.log('✅ Real-time sync completed');
               } else {
                 console.log('⚠️ Real-time listener received null/undefined data');
+                setHasInitializedFromFirestore(true);
               }
             },
             (error) => {
@@ -85,12 +109,14 @@ export function useChecklistWithAuth() {
             // No data anywhere, or user has already completed migration, start fresh
             setState(localData);
           }
+          setHasInitializedFromFirestore(true);
         }
       } catch (error) {
         console.error('❌ Error setting up sync:', error);
         // Fallback to local storage
         const localData = loadChecklistState();
         setState(localData);
+        setHasInitializedFromFirestore(true);
       } finally {
         setIsLoading(false);
       }
@@ -126,7 +152,9 @@ export function useChecklistWithAuth() {
       try {
         console.log('🔍 About to save to Firestore, this should trigger real-time listeners on other devices');
         await saveUserChecklistState(user.uid, newState);
-        setLastSyncTime(new Date());
+        const saveTime = new Date();
+        setLastSyncTime(saveTime);
+        setLastLocalSaveTime(saveTime); // Track when we last saved locally
         console.log('✅ Data saved to Firestore and synced - other devices should receive this update via real-time listeners');
       } catch (error) {
         console.error('❌ Error saving to Firestore:', error);
@@ -195,16 +223,30 @@ export function useChecklistWithAuth() {
     return () => clearInterval(interval);
   }, [state.lastReset, state.items, saveData]);
 
-  // Save state whenever it changes
+  // Save state whenever it changes, but only after we've initialized from Firestore
   useEffect(() => {
+    // Don't save if we haven't initialized from Firestore yet
+    if (!hasInitializedFromFirestore) {
+      console.log('🔍 Skipping save - not yet initialized from Firestore');
+      return;
+    }
+
+    // Don't save empty states to Firestore if user is authenticated
+    // This prevents Device B from overwriting Device A's data with empty state
+    if (user && state.items.length === 0 && state.progressHistory.length === 0) {
+      console.log('🔍 Skipping save - empty state detected, not overwriting Firestore data');
+      return;
+    }
+
     console.log('🔍 State changed, triggering saveData:', {
       itemsCount: state.items.length,
       progressHistoryCount: state.progressHistory.length,
       lastReset: state.lastReset,
-      nextReset: state.nextReset
+      nextReset: state.nextReset,
+      hasInitializedFromFirestore
     });
     saveData(state);
-  }, [state, saveData]);
+  }, [state, saveData, hasInitializedFromFirestore, user, lastLocalSaveTime]);
 
   // Auto-save current hour progress when items change
   useEffect(() => {
