@@ -2,25 +2,20 @@
 
 import React, { useState } from 'react';
 import Checklist from "@/components/Checklist";
-import { DataMigrationModal } from "@/components/DataMigrationModal";
 import { Profile } from "@/components/Profile";
 import Settings from "@/components/Settings";
-import { useChecklistWithAuth } from "@/hooks/useChecklistWithAuth";
+import { useChecklist } from "@/hooks/useChecklist";
 import Button from "@/components/ui/Button";
 import ThemeToggle from "@/components/ThemeToggle";
 import SaveStatus from "@/components/SaveStatus";
-import SyncStatus from "@/components/SyncStatus";
 
 export default function Home() {
     const {
-    showMigrationModal,
-    handleMigrationComplete,
     settings,
     updateSettings,
-    lastSyncTime,
-    isSyncing,
-    syncDataFromFirestore
-  } = useChecklistWithAuth();
+    exportData,
+    handleFileUpload
+  } = useChecklist();
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -33,11 +28,6 @@ export default function Home() {
                 Hourly Checklist
               </h1>
               <SaveStatus />
-              <SyncStatus
-                lastSyncTime={lastSyncTime}
-                isSyncing={isSyncing}
-                onManualSync={syncDataFromFirestore}
-              />
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -59,18 +49,15 @@ export default function Home() {
           <Checklist />
         </div>
       </div>
-      
-      <DataMigrationModal 
-        isOpen={showMigrationModal}
-        onMigrationComplete={handleMigrationComplete}
-      />
-      
+
       {/* Settings Modal */}
       {showSettings && (
         <Settings
           settings={settings}
           onSaveSettings={updateSettings}
           onClose={() => setShowSettings(false)}
+          onExportData={exportData}
+          onImportData={handleFileUpload}
         />
       )}
     </>

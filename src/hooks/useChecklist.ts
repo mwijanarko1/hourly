@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChecklistState, ChecklistItem, UserSettings } from '@/types';
 import { loadChecklistState, saveChecklistState } from '@/utils/storage';
+import { downloadData, uploadData } from '@/utils/dataManagement';
 import { getNextHourReset, getLastHourReset, shouldReset } from '@/utils/time';
 import { generateId, sanitizeText, validateChecklistItem } from '@/utils/validation';
 import { getCurrentHour, getTodayString, updateOrCreateHourlyProgress } from '@/utils/progress';
@@ -10,30 +11,32 @@ export function useChecklist() {
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
 
+  // Save data to local storage
+  const saveData = useCallback((newState: ChecklistState) => {
+    saveChecklistState(newState);
+  }, []);
+
   // Check for hourly reset and save progress
   useEffect(() => {
     const checkReset = () => {
       if (shouldReset(state.lastReset)) {
-        // Save current progress before resetting
         if (state.items.length > 0) {
           const currentHour = getCurrentHour();
           const today = getTodayString();
-          
+
           setState(prevState => {
-            // Reset only the completion status, keep all items
             const resetItems = prevState.items.map(item => ({
               ...item,
               completed: false
             }));
-            
-            // Update or create progress entry for the current hour
+
             const updatedProgressHistory = updateOrCreateHourlyProgress(
               prevState.progressHistory,
               prevState.items,
               currentHour,
               today
             );
-            
+
             const newState = {
               items: resetItems,
               lastReset: getLastHourReset(),
@@ -41,7 +44,7 @@ export function useChecklist() {
               progressHistory: updatedProgressHistory,
               settings: prevState.settings
             };
-            saveChecklistState(newState);
+            saveData(newState);
             return newState;
           });
         } else {
@@ -53,36 +56,31 @@ export function useChecklist() {
               progressHistory: prevState.progressHistory,
               settings: prevState.settings
             };
-            saveChecklistState(newState);
+            saveData(newState);
             return newState;
           });
         }
       }
     };
 
-    // Check immediately
     checkReset();
-
-    // Check every minute
     const interval = setInterval(checkReset, 60000);
     return () => clearInterval(interval);
-  }, [state.lastReset, state.items]);
+  }, [state.lastReset, state.items, saveData]);
 
-  // Save state to localStorage whenever it changes
+  // Save state whenever it changes
   useEffect(() => {
-    saveChecklistState(state);
-  }, [state]);
+    saveData(state);
+  }, [state, saveData]);
 
   // Auto-save current hour progress when items change
   useEffect(() => {
     if (state.items.length > 0) {
       const currentHour = getCurrentHour();
       const today = getTodayString();
-      
-      // Only auto-save if we're in the current hour (not viewing historical data)
       const now = new Date();
       const isCurrentHour = now.getHours() === currentHour;
-      
+
       if (isCurrentHour) {
         setState(prevState => ({
           ...prevState,
@@ -97,34 +95,26 @@ export function useChecklist() {
     }
   }, [state.items]);
 
-  // Additional safety: save before page unload
+  // Save before page unload
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      saveChecklistState(state);
-    };
-
+    const handleBeforeUnload = () => saveData(state);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        saveChecklistState(state);
-      }
+      if (document.visibilityState === 'hidden') saveData(state);
     };
 
-    // Save when page is about to unload
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    // Save when tab becomes hidden (user switches tabs)
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [state]);
+  }, [state, saveData]);
 
   const addItem = useCallback((text: string) => {
     const sanitizedText = sanitizeText(text);
     const validation = validateChecklistItem(sanitizedText);
-    
+
     if (!validation.isValid) {
       throw new Error(validation.error);
     }
@@ -145,7 +135,7 @@ export function useChecklist() {
   const updateItem = useCallback((id: string, text: string) => {
     const sanitizedText = sanitizeText(text);
     const validation = validateChecklistItem(sanitizedText);
-    
+
     if (!validation.isValid) {
       throw new Error(validation.error);
     }
@@ -179,7 +169,7 @@ export function useChecklist() {
       const newItems = Array.from(prevState.items);
       const [removed] = newItems.splice(startIndex, 1);
       newItems.splice(endIndex, 0, removed);
-      
+
       return {
         ...prevState,
         items: newItems
@@ -219,19 +209,18 @@ export function useChecklist() {
     }));
   }, []);
 
-  // Function to toggle historical item completion
   const toggleHistoricalItem = useCallback((itemId: string, date: string, hour: number) => {
     setState(prevState => {
       const updatedHistory = prevState.progressHistory.map(progress => {
         if (progress.date === date && progress.hour === hour) {
-          const updatedItems = progress.items.map(item => 
+          const updatedItems = progress.items.map(item =>
             item.id === itemId ? { ...item, completed: !item.completed } : item
           );
-          
+
           const completedItems = updatedItems.filter(item => item.completed).length;
           const totalItems = updatedItems.length;
           const completionRate = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-          
+
           return {
             ...progress,
             items: updatedItems,
@@ -241,7 +230,7 @@ export function useChecklist() {
         }
         return progress;
       });
-      
+
       return {
         ...prevState,
         progressHistory: updatedHistory
@@ -249,11 +238,10 @@ export function useChecklist() {
     });
   }, []);
 
-  // Function to update historical item text
   const updateHistoricalItem = useCallback((itemId: string, newText: string, date: string, hour: number) => {
     const sanitizedText = sanitizeText(newText);
     const validation = validateChecklistItem(sanitizedText);
-    
+
     if (!validation.isValid) {
       throw new Error(validation.error);
     }
@@ -261,10 +249,10 @@ export function useChecklist() {
     setState(prevState => {
       const updatedHistory = prevState.progressHistory.map(progress => {
         if (progress.date === date && progress.hour === hour) {
-          const updatedItems = progress.items.map(item => 
+          const updatedItems = progress.items.map(item =>
             item.id === itemId ? { ...item, text: sanitizedText } : item
           );
-          
+
           return {
             ...progress,
             items: updatedItems
@@ -272,7 +260,7 @@ export function useChecklist() {
         }
         return progress;
       });
-      
+
       return {
         ...prevState,
         progressHistory: updatedHistory
@@ -280,7 +268,6 @@ export function useChecklist() {
     });
   }, []);
 
-  // Function to remove historical item
   const removeHistoricalItem = useCallback((itemId: string, date: string, hour: number) => {
     setState(prevState => {
       const updatedHistory = prevState.progressHistory.map(progress => {
@@ -289,7 +276,7 @@ export function useChecklist() {
           const completedItems = updatedItems.filter(item => item.completed).length;
           const totalItems = updatedItems.length;
           const completionRate = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-          
+
           return {
             ...progress,
             items: updatedItems,
@@ -299,12 +286,29 @@ export function useChecklist() {
         }
         return progress;
       });
-      
+
       return {
         ...prevState,
         progressHistory: updatedHistory
       };
     });
+  }, []);
+
+  const importData = useCallback((importedData: ChecklistState) => {
+    setState(importedData);
+  }, []);
+
+  const exportData = useCallback(() => {
+    downloadData(state);
+  }, [state]);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    try {
+      const importedData = await uploadData(file);
+      setState(importedData);
+    } catch (error) {
+      throw error;
+    }
   }, []);
 
   return {
@@ -331,6 +335,9 @@ export function useChecklist() {
     toggleHistoricalItem,
     updateHistoricalItem,
     removeHistoricalItem,
-    setState
+    setState,
+    importData,
+    exportData,
+    handleFileUpload
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useChecklistWithAuth } from '@/hooks/useChecklistWithAuth';
+import { useChecklist } from '@/hooks/useChecklist';
 import { updateOrCreateHourlyProgress } from '@/utils/progress';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -30,17 +30,10 @@ export default function Checklist() {
     updateHistoricalItem,
     removeHistoricalItem,
     setState
-  } = useChecklistWithAuth();
+  } = useChecklist();
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
-
-  // Set initial date after component mounts to avoid hydration mismatch
-  React.useEffect(() => {
-    if (selectedDate === null) {
-      setSelectedDate(new Date().toISOString().split('T')[0]);
-    }
-  }, [selectedDate]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItemText, setNewItemText] = useState('');
@@ -138,7 +131,7 @@ export default function Checklist() {
   };
 
   // Get progress for selected date and hour
-  const selectedDateProgress = selectedDate ? progressHistory.filter(progress => progress.date === selectedDate) : [];
+  const selectedDateProgress = progressHistory.filter(progress => progress.date === selectedDate);
   const selectedHourProgress = selectedHour !== null
     ? selectedDateProgress.find(p => p.hour === selectedHour)
     : null;
@@ -146,7 +139,7 @@ export default function Checklist() {
   // Check if the selected hour is the current hour
   const currentHour = new Date().getHours();
   const isCurrentHour = selectedHour === currentHour;
-  const isToday = selectedDate ? selectedDate === new Date().toISOString().split('T')[0] : false;
+  const isToday = selectedDate === new Date().toISOString().split('T')[0];
 
   // Get hours with data for the selected date
   const hoursWithData = selectedDateProgress
@@ -204,7 +197,7 @@ export default function Checklist() {
       <ProgressChart
         progressHistory={progressHistory}
         settings={settings}
-        selectedDate={selectedDate || new Date().toISOString().split('T')[0]}
+        selectedDate={selectedDate}
         selectedHour={selectedHour}
         onDateChange={setSelectedDate}
         onHourChange={setSelectedHour}
@@ -282,7 +275,7 @@ export default function Checklist() {
                   </Button>
                   
                   <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    {selectedDate ? formatDate(selectedDate) : 'Loading...'} - {formatHour(selectedHour)}
+                    {formatDate(selectedDate)} - {formatHour(selectedHour)}
                   </span>
                   
                   <Button

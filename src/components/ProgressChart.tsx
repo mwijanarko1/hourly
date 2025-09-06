@@ -218,12 +218,12 @@ export default function ProgressChart({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  Sync Your Progress
+                  Sign In for More Features
                 </h4>
               </div>
               <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                You have {progressHistory.length} day{progressHistory.length !== 1 ? 's' : ''} of progress data. 
-                Sign in to sync across all your devices and never lose your data.
+                You have {progressHistory.length} day{progressHistory.length !== 1 ? 's' : ''} of progress data.
+                Sign in to access additional features.
               </p>
               <Button
                 onClick={signInWithGoogle}

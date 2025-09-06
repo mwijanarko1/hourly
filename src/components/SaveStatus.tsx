@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useChecklistWithAuth } from '@/hooks/useChecklistWithAuth';
+import { useChecklist } from '@/hooks/useChecklist';
 
 export default function SaveStatus() {
-  const { items } = useChecklistWithAuth();
+  const { items } = useChecklist();
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 

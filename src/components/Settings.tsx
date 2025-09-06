@@ -5,14 +5,17 @@ import { UserSettings } from '@/types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Checkbox from './ui/Checkbox';
+import DataManagement from './DataManagement';
 
 interface SettingsProps {
   settings: UserSettings;
   onSaveSettings: (settings: UserSettings) => void;
   onClose: () => void;
+  onExportData: () => void;
+  onImportData: (file: File) => Promise<void>;
 }
 
-export default function Settings({ settings, onSaveSettings, onClose }: SettingsProps) {
+export default function Settings({ settings, onSaveSettings, onClose, onExportData, onImportData }: SettingsProps) {
   const [activeHours, setActiveHours] = useState<number[]>(settings.activeHours);
   const [notifications, setNotifications] = useState(settings.notifications);
 
@@ -150,6 +153,12 @@ export default function Settings({ settings, onSaveSettings, onClose }: Settings
               label="Enable notifications for hourly resets"
             />
           </div>
+
+          {/* Data Management */}
+          <DataManagement
+            onExport={onExportData}
+            onImport={onImportData}
+          />
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
