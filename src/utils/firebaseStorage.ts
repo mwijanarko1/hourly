@@ -4,7 +4,9 @@ import {
   setDoc, 
   updateDoc,
   onSnapshot,
-  Unsubscribe
+  Unsubscribe,
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ChecklistState, UserSettings } from '@/types';
@@ -14,25 +16,17 @@ const COLLECTION_NAME = 'userChecklists';
 /**
  * Save user's checklist state to Firestore
  */
-export async function saveUserChecklistState(userId: string, state: ChecklistState): Promise<void> {
+export async function saveUserChecklistState(userId: string, state: ChecklistState, options?: { skipTimestamp?: boolean }): Promise<void> {
   try {
     const userDocRef = doc(db, COLLECTION_NAME, userId);
-    
-    // Debug: Log what we're about to save
-    console.log('🔍 Saving to Firestore:', {
-      userId,
-      itemsCount: state.items.length,
-      progressHistoryCount: state.progressHistory.length,
-      items: state.items,
-      progressHistory: state.progressHistory
-    });
-    
+
     // Convert dates to ISO strings for Firestore storage
     const stateToSave = {
       ...state,
       lastReset: state.lastReset.toISOString(),
       nextReset: state.nextReset.toISOString(),
-      lastModified: new Date().toISOString(), // Add timestamp for conflict resolution
+      // Use server timestamp for more reliable conflict resolution
+      lastModified: options?.skipTimestamp ? (state as any).lastModified : serverTimestamp(),
       items: state.items.map(item => ({
         ...item,
         createdAt: item.createdAt.toISOString()
@@ -47,9 +41,7 @@ export async function saveUserChecklistState(userId: string, state: ChecklistSta
       }))
     };
 
-    console.log('🔍 State to save to Firestore:', stateToSave);
     await setDoc(userDocRef, stateToSave, { merge: true });
-    console.log('✅ Successfully saved to Firestore');
   } catch (error) {
     console.error('Error saving checklist state to Firestore:', error);
     throw error;
@@ -150,33 +142,17 @@ export function subscribeToUserChecklist(
   onError?: (error: Error) => void
 ): Unsubscribe {
   const userDocRef = doc(db, COLLECTION_NAME, userId);
-  
-  console.log('🔍 Setting up onSnapshot listener for user:', userId);
-  
+
   return onSnapshot(
     userDocRef,
     (docSnap) => {
-      console.log('🔍 onSnapshot triggered:', {
-        exists: docSnap.exists(),
-        hasData: docSnap.exists() && docSnap.data(),
-        metadata: docSnap.metadata
-      });
-      
       if (!docSnap.exists()) {
-        console.log('⚠️ Document does not exist, calling onDataChange with null');
         onDataChange(null);
         return;
       }
 
       const data = docSnap.data();
-      console.log('🔍 Raw Firestore data received:', {
-        keys: Object.keys(data),
-        itemsCount: data.items?.length || 0,
-        progressHistoryCount: data.progressHistory?.length || 0,
-        lastModified: data.lastModified,
-        data: data
-      });
-      
+
       try {
         // Convert ISO strings back to Date objects
         const checklistState: ChecklistState = {
@@ -186,14 +162,14 @@ export function subscribeToUserChecklist(
           })),
           lastReset: new Date(data.lastReset),
           nextReset: new Date(data.nextReset),
-          progressHistory: data.progressHistory.map((progress: { 
-            hour: number; 
-            date: string; 
-            completedItems: number; 
-            totalItems: number; 
-            completionRate: number; 
-            items: { id: string; text: string; completed: boolean; createdAt: string }[]; 
-            timestamp: string; 
+          progressHistory: data.progressHistory.map((progress: {
+            hour: number;
+            date: string;
+            completedItems: number;
+            totalItems: number;
+            completionRate: number;
+            items: { id: string; text: string; completed: boolean; createdAt: string }[];
+            timestamp: string;
           }) => ({
             ...progress,
             timestamp: new Date(progress.timestamp),
@@ -204,15 +180,14 @@ export function subscribeToUserChecklist(
           })),
           settings: data.settings
         };
-        
-        console.log('🔍 Parsed checklist state:', {
-          itemsCount: checklistState.items.length,
-          progressHistoryCount: checklistState.progressHistory.length,
-          state: checklistState
-        });
-        
-        console.log('🔍 Calling onDataChange with parsed data');
-        onDataChange(checklistState);
+
+        // Pass along the server timestamp for conflict resolution
+        const stateWithTimestamp = {
+          ...checklistState,
+          lastModified: data.lastModified instanceof Timestamp ? data.lastModified.toDate() : new Date(data.lastModified || 0)
+        };
+
+        onDataChange(stateWithTimestamp);
       } catch (error) {
         console.error('❌ Error parsing real-time data:', error);
         if (onError) {

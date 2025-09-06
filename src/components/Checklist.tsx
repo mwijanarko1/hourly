@@ -32,10 +32,15 @@ export default function Checklist() {
     setState
   } = useChecklistWithAuth();
 
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
+
+  // Set initial date after component mounts to avoid hydration mismatch
+  React.useEffect(() => {
+    if (selectedDate === null) {
+      setSelectedDate(new Date().toISOString().split('T')[0]);
+    }
+  }, [selectedDate]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItemText, setNewItemText] = useState('');
@@ -133,15 +138,15 @@ export default function Checklist() {
   };
 
   // Get progress for selected date and hour
-  const selectedDateProgress = progressHistory.filter(progress => progress.date === selectedDate);
-  const selectedHourProgress = selectedHour !== null 
+  const selectedDateProgress = selectedDate ? progressHistory.filter(progress => progress.date === selectedDate) : [];
+  const selectedHourProgress = selectedHour !== null
     ? selectedDateProgress.find(p => p.hour === selectedHour)
     : null;
 
   // Check if the selected hour is the current hour
   const currentHour = new Date().getHours();
   const isCurrentHour = selectedHour === currentHour;
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  const isToday = selectedDate ? selectedDate === new Date().toISOString().split('T')[0] : false;
 
   // Get hours with data for the selected date
   const hoursWithData = selectedDateProgress
@@ -196,10 +201,10 @@ export default function Checklist() {
       <Timer nextReset={nextReset} />
 
       {/* Progress Chart */}
-      <ProgressChart 
-        progressHistory={progressHistory} 
+      <ProgressChart
+        progressHistory={progressHistory}
         settings={settings}
-        selectedDate={selectedDate}
+        selectedDate={selectedDate || new Date().toISOString().split('T')[0]}
         selectedHour={selectedHour}
         onDateChange={setSelectedDate}
         onHourChange={setSelectedHour}
@@ -277,7 +282,7 @@ export default function Checklist() {
                   </Button>
                   
                   <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    {formatDate(selectedDate)} - {formatHour(selectedHour)}
+                    {selectedDate ? formatDate(selectedDate) : 'Loading...'} - {formatHour(selectedHour)}
                   </span>
                   
                   <Button
@@ -339,10 +344,10 @@ export default function Checklist() {
                     item={historicalItem}
                     isEditing={isEditing === historicalItem.id}
                     editText={editText}
-                    onToggle={() => toggleHistoricalItem(historicalItem.id, selectedDate, selectedHour)}
+                    onToggle={() => toggleHistoricalItem(historicalItem.id, selectedDate || '', selectedHour)}
                     onRemove={() => {
                       if (window.confirm('Are you sure you want to remove this item from this hour?')) {
-                        removeHistoricalItem(historicalItem.id, selectedDate, selectedHour);
+                        removeHistoricalItem(historicalItem.id, selectedDate || '', selectedHour);
                       }
                     }}
                     onStartEdit={startEditing}
@@ -350,7 +355,7 @@ export default function Checklist() {
                     onSaveEdit={() => {
                       if (isEditing && editText.trim()) {
                         try {
-                          updateHistoricalItem(isEditing, editText, selectedDate, selectedHour);
+                          updateHistoricalItem(isEditing, editText, selectedDate || '', selectedHour);
                           cancelEditing();
                         } catch (error) {
                           console.error('Error updating historical item:', error);

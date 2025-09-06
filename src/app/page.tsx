@@ -12,10 +12,10 @@ import SaveStatus from "@/components/SaveStatus";
 import SyncStatus from "@/components/SyncStatus";
 
 export default function Home() {
-  const { 
-    showMigrationModal, 
-    handleMigrationComplete, 
-    settings, 
+    const {
+    showMigrationModal,
+    handleMigrationComplete,
+    settings,
     updateSettings,
     lastSyncTime,
     isSyncing,
@@ -33,7 +33,7 @@ export default function Home() {
                 Hourly Checklist
               </h1>
               <SaveStatus />
-              <SyncStatus 
+              <SyncStatus
                 lastSyncTime={lastSyncTime}
                 isSyncing={isSyncing}
                 onManualSync={syncDataFromFirestore}
