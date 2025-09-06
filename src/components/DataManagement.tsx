@@ -12,6 +12,7 @@ interface DataManagementProps {
 export default function DataManagement({ onExport, onImport }: DataManagementProps) {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
@@ -44,13 +45,17 @@ export default function DataManagement({ onExport, onImport }: DataManagementPro
 
     setIsImporting(true);
     setImportError(null);
+    setImportSuccess(false);
 
     try {
       await onImport(file);
+      setImportSuccess(true);
       // Clear the file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      // Clear success message after 3 seconds
+      setTimeout(() => setImportSuccess(false), 3000);
     } catch (error) {
       console.error('Import failed:', error);
       setImportError(error instanceof Error ? error.message : 'Import failed. Please try again.');
@@ -104,6 +109,12 @@ export default function DataManagement({ onExport, onImport }: DataManagementPro
             )}
           </Button>
         </div>
+
+        {importSuccess && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
+            <p className="text-green-600 dark:text-green-400 text-sm">✅ Data imported successfully!</p>
+          </div>
+        )}
 
         {importError && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">

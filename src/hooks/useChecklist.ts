@@ -306,10 +306,11 @@ export function useChecklist() {
     try {
       const importedData = await uploadData(file);
       setState(importedData);
+      saveData(importedData); // Save to local storage immediately
     } catch (error) {
       throw error;
     }
-  }, []);
+  }, [saveData]);
 
   return {
     items: state.items,
