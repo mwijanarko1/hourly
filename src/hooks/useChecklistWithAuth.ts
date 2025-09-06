@@ -73,7 +73,8 @@ export function useChecklistWithAuth() {
                   setIsReceivingUpdate(true);
                   
                   // Remove timestamp before setting state (it's not part of ChecklistState)
-                  const { lastModified, ...cleanState } = firestoreDataWithTimestamp;
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  const { lastModified: _, ...cleanState } = firestoreDataWithTimestamp;
                   setState(cleanState);
                   saveChecklistState(cleanState);
                   setLastSyncTime(new Date());
@@ -116,7 +117,8 @@ export function useChecklistWithAuth() {
                 if (firestoreData) {
                   console.log('📡 Received initial data from another device');
                   const firestoreDataWithTimestamp = firestoreData as ChecklistState & { lastModified?: Date };
-                  const { lastModified, ...cleanState } = firestoreDataWithTimestamp;
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  const { lastModified: _, ...cleanState } = firestoreDataWithTimestamp;
                   setState(cleanState);
                   saveChecklistState(cleanState);
                   setLastSyncTime(new Date());
@@ -149,7 +151,7 @@ export function useChecklistWithAuth() {
         unsubscribe();
       }
     };
-  }, [user, isFirstTimeUser, hasCompletedMigration]);
+  }, [user, isFirstTimeUser, hasCompletedMigration, hasInitializedFromFirestore, isReceivingUpdate, lastLocalSaveTime]);
 
   // Save data to appropriate storage
   const saveData = useCallback(async (newState: ChecklistState) => {
@@ -263,7 +265,7 @@ export function useChecklistWithAuth() {
 
     console.log('💾 Auto-saving state change');
     saveData(state);
-  }, [state, hasInitializedFromFirestore, user, isReceivingUpdate, lastLocalSaveTime]); // Include dependencies
+  }, [state, hasInitializedFromFirestore, user, isReceivingUpdate, lastLocalSaveTime, saveData]); // Include dependencies
 
   // Auto-save current hour progress when items change
   useEffect(() => {

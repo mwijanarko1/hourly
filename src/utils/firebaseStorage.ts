@@ -26,7 +26,7 @@ export async function saveUserChecklistState(userId: string, state: ChecklistSta
       lastReset: state.lastReset.toISOString(),
       nextReset: state.nextReset.toISOString(),
       // Use server timestamp for more reliable conflict resolution
-      lastModified: options?.skipTimestamp ? (state as any).lastModified : serverTimestamp(),
+      lastModified: options?.skipTimestamp ? (state as ChecklistState & { lastModified?: Date }).lastModified : serverTimestamp(),
       items: state.items.map(item => ({
         ...item,
         createdAt: item.createdAt.toISOString()
